@@ -1,6 +1,7 @@
 """
 Package Import
 """
+
 import yfinance as yf
 import numpy as np
 import pandas as pd
@@ -37,8 +38,8 @@ end = "2024-04-01"
 # Initialize df and df_returns
 df = pd.DataFrame()
 for asset in assets:
-    raw = yf.download(asset, start=start, end=end, auto_adjust = False)
-    df[asset] = raw['Adj Close']
+    raw = yf.download(asset, start=start, end=end, auto_adjust=False)
+    df[asset] = raw["Adj Close"]
 
 df_returns = df.pct_change().fillna(0)
 
@@ -62,7 +63,8 @@ class EqualWeightPortfolio:
         """
         TODO: Complete Task 1 Below
         """
-
+        n_assets = len(assets)
+        self.portfolio_weights[assets] = 1.0 / n_assets
         """
         TODO: Complete Task 1 Above
         """
@@ -113,9 +115,20 @@ class RiskParityPortfolio:
         """
         TODO: Complete Task 2 Below
         """
+        for i in range(self.lookback + 1, len(df)):
+            # Get historical returns for the lookback window
+            window_returns = df_returns.copy()[assets].iloc[i - self.lookback : i]
 
+            # Calculate volatility (standard deviation)
+            volatility = window_returns.std()
 
+            # Calculate inverse volatility weights
+            inv_volatility = 1 / volatility
 
+            # Normalize weights so they sum to 1
+            weights = inv_volatility / inv_volatility.sum()
+
+            self.portfolio_weights.loc[df.index[i], assets] = weights
         """
         TODO: Complete Task 2 Above
         """
@@ -188,10 +201,16 @@ class MeanVariancePortfolio:
                 TODO: Complete Task 3 Below
                 """
 
-                # Sample Code: Initialize Decision w and the Objective
-                # NOTE: You can modify the following code
-                w = model.addMVar(n, name="w", ub=1)
-                model.setObjective(w.sum(), gp.GRB.MAXIMIZE)
+                # Define variables
+                w = model.addMVar(n, name="w", ub=1.0)
+
+                # Objective: Maximize w^T * mu - (gamma / 2) * w^T * Sigma * w
+                term1 = w @ mu
+                term2 = w @ Sigma @ w
+                model.setObjective(term1 - (gamma / 2) * term2, gp.GRB.MAXIMIZE)
+
+                # Constraint: Sum of weights = 1
+                model.addConstr(w.sum() == 1, "budget")
 
                 """
                 TODO: Complete Task 3 Above
@@ -277,6 +296,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     judge = AssignmentJudge()
-    
+
     # All grading logic is protected in grader.py
     judge.run_grading(args)
